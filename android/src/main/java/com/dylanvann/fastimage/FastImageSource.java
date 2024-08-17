@@ -7,18 +7,21 @@ import android.text.TextUtils;
 
 import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.load.model.Headers;
-import com.facebook.react.views.imagehelper.ImageSource;
 
 import javax.annotation.Nullable;
 
-public class FastImageSource extends ImageSource {
+public class FastImageSource {
     private static final String DATA_SCHEME = "data";
     private static final String LOCAL_RESOURCE_SCHEME = "res";
     private static final String ANDROID_RESOURCE_SCHEME = "android.resource";
     private static final String ANDROID_CONTENT_SCHEME = "content";
     private static final String LOCAL_FILE_SCHEME = "file";
+
     private final Headers mHeaders;
-    private Uri mUri;
+    private final Uri mUri;
+    private final String mSource;
+    private final double mWidth;
+    private final double mHeight;
 
     public static boolean isBase64Uri(Uri uri) {
         return DATA_SCHEME.equals(uri.getScheme());
@@ -41,63 +44,64 @@ public class FastImageSource extends ImageSource {
     }
 
     public FastImageSource(Context context, String source) {
-        this(context, source, null);
+        this(context, source, null, 0.0d, 0.0d);
     }
 
     public FastImageSource(Context context, String source, @Nullable Headers headers) {
-        this(context, source, 0.0d, 0.0d, headers);
+        this(context, source, headers, 0.0d, 0.0d);
     }
 
-    public FastImageSource(Context context, String source, double width, double height, @Nullable Headers headers) {
-        super(context, source, width, height);
-        mHeaders = headers == null ? Headers.DEFAULT : headers;
-        mUri = super.getUri();
+    public FastImageSource(Context context, String source, @Nullable Headers headers, double width, double height) {
+        this.mSource = source;
+        this.mWidth = width;
+        this.mHeight = height;
+        this.mHeaders = headers == null ? Headers.DEFAULT : headers;
+
+        Uri uri = Uri.parse(source);
+        if (isLocalResourceUri(uri)) {
+            // Convert res:/ scheme to android.resource:// so Glide can understand the uri.
+            uri = Uri.parse(uri.toString().replace("res:/", ANDROID_RESOURCE_SCHEME + "://" + context.getPackageName() + "/"));
+        }
+
+        this.mUri = uri;
 
         if (isResource() && TextUtils.isEmpty(mUri.toString())) {
-            throw new Resources.NotFoundException("Local Resource Not Found. Resource: '" + getSource() + "'.");
-        }
-
-        if (isLocalResourceUri(mUri)) {
-            // Convert res:/ scheme to android.resource:// so
-            // glide can understand the uri.
-            mUri = Uri.parse(mUri.toString().replace("res:/", ANDROID_RESOURCE_SCHEME + "://" + context.getPackageName() + "/"));
+            throw new Resources.NotFoundException("Local Resource Not Found. Resource: '" + mSource + "'.");
         }
     }
 
-
     public boolean isBase64Resource() {
-        return mUri != null && FastImageSource.isBase64Uri(mUri);
+        return mUri != null && isBase64Uri(mUri);
     }
 
     public boolean isResource() {
-        return mUri != null && FastImageSource.isResourceUri(mUri);
+        return mUri != null && isResourceUri(mUri);
     }
 
     public boolean isLocalFile() {
-        return mUri != null && FastImageSource.isLocalFileUri(mUri);
+        return mUri != null && isLocalFileUri(mUri);
     }
 
     public boolean isContentUri() {
-        return mUri != null && FastImageSource.isContentUri(mUri);
+        return mUri != null && isContentUri(mUri);
     }
 
     public Object getSourceForLoad() {
         if (isContentUri()) {
-            return getSource();
+            return mSource;
         }
         if (isBase64Resource()) {
-            return getSource();
+            return mSource;
         }
         if (isResource()) {
-            return getUri();
+            return mUri;
         }
         if (isLocalFile()) {
-            return getUri().toString();
+            return mUri.toString();
         }
         return getGlideUrl();
     }
 
-    @Override
     public Uri getUri() {
         return mUri;
     }
@@ -108,5 +112,17 @@ public class FastImageSource extends ImageSource {
 
     public GlideUrl getGlideUrl() {
         return new GlideUrl(getUri().toString(), getHeaders());
+    }
+
+    public String getSource() {
+        return mSource;
+    }
+
+    public double getWidth() {
+        return mWidth;
+    }
+
+    public double getHeight() {
+        return mHeight;
     }
 }
